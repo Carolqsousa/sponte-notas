@@ -333,12 +333,21 @@ def formatar_aba(ws, colunas, prova_lancada, formato_b):
     ws.auto_filter.ref = ws.dimensions
 
     # Aplica filtro na coluna Alerta — mostra só ⚠️
+    # Oculta linhas onde Alerta está vazio (alunos sem problema)
     alerta_idx = next((i for i, c in enumerate(colunas) if c == "⚠️ Alerta"), None)
     if alerta_idx is not None:
-        from openpyxl.worksheet.filters import AutoFilter, FilterColumn, Filters
-        ws.auto_filter.filterColumn.append(
-            FilterColumn(colId=alerta_idx, filters=Filters(filter=["⚠️"]))
-        )
+        from openpyxl.worksheet.filters import FilterColumn, Filters
+        fc = FilterColumn(colId=alerta_idx)
+        fc.filters = Filters()
+        fc.filters.filter.append("⚠️")
+        ws.auto_filter.filterColumn.append(fc)
+
+        # Oculta manualmente as linhas sem alerta
+        # (garante que o Excel mostre o filtro aplicado ao abrir)
+        for row in ws.iter_rows(min_row=2):
+            alerta_cell = row[alerta_idx]
+            if alerta_cell.value != "⚠️":
+                ws.row_dimensions[alerta_cell.row].hidden = True
 
     # Freeze até Média Geral (inclusive) — conta colunas visíveis até lá
     media_geral_idx = next((i+1 for i, c in enumerate(colunas) if c in ("Média Geral", "Média Geral Av")), None)
