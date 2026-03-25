@@ -345,9 +345,27 @@ def formatar_aba(ws, colunas, prova_lancada, formato_b):
     if media_geral_idx:
         ws.freeze_panes = get_column_letter(media_geral_idx + 1) + "2"
 
-    # Colunas ocultas
+    # Colunas ocultas fixas
+    # Colunas de provas não lançadas também ficam ocultas
+    COLS_MID_HIDE   = {"Mid - Homework", "Mid - Reading", "Mid - Gramática & Vocab",
+                       "Mid - Listening", "Mid - Writing", "Mid - Speaking/Oral", "Média Mid"}
+    COLS_FINAL_HIDE = {"Final - Homework", "Final - Reading", "Final - Gramática & Vocab",
+                       "Final - Listening", "Final - Writing", "Final - Speaking/Oral", "Média Final"}
+    COLS_AV_HIDE    = {"Av2 - Writing", "Av3 - Listening", "Av4 - Homework", "Média Geral Av"}
+
+    colunas_ocultar = set(COLUNAS_OCULTAS)
+
+    if not formato_b:
+        if prova_lancada == "Progress Check":
+            colunas_ocultar |= COLS_MID_HIDE | COLS_FINAL_HIDE
+        elif prova_lancada == "Mid-term":
+            colunas_ocultar |= COLS_FINAL_HIDE
+        # Final: mostra tudo
+    else:
+        pass  # Formato B: sempre mostra todas as colunas
+
     for i, col in enumerate(colunas, start=1):
-        if col in COLUNAS_OCULTAS:
+        if col in colunas_ocultar:
             ws.column_dimensions[get_column_letter(i)].hidden = True
 
 # ─── Coleta de dados ───────────────────────────────────────────────────────────
