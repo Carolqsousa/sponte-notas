@@ -1,6 +1,12 @@
 """
-Cultura Inglesa — Mapa de Notas
-App Streamlit com suporte a nova planilha e atualização de planilha existente.
+Cultura Inglesa — Mapa de Notas v2
+Melhorias:
+- Action Plan e Comments após Média Geral
+- Hide Professor e Situação
+- Freeze até Média Geral
+- Coluna Alerta com filtro por prova lançada
+- Botão download todas as unidades
+- Integração Google Sheets
 """
 
 import streamlit as st
@@ -9,6 +15,8 @@ import pandas as pd
 import time
 import io
 import base64
+import zipfile
+import json
 from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment
@@ -57,8 +65,8 @@ PHASES_FORMATO_B = {
     "VANTAGE 1 (F)", "VANTAGE 2 (F)",
     "UPPER INTERMEDIATE 3 (F)",
 }
-COLUNAS_EXTRA = ["Status", "Action Plan", "Coordinator's Comment"]
 
+# Colunas por formato
 def build_colunas_a():
     cols = []
     for prova, (pre, comps) in PROVAS_A.items():
@@ -71,33 +79,50 @@ def build_colunas_a():
         cols.append(f"Média {pre}")
     return cols
 
-COLUNAS_A     = build_colunas_a()
-COLUNAS_B     = [f"{pre} - {comp}" for _, (pre, comp) in PROVAS_B_SIMPLES.items()] + ["Média Geral Av"]
-COLUNAS_INFO_A = ["Turma", "Phase", "Professor", "student_id", "Nome Aluno", "Situação", "Média Geral"]
-COLUNAS_INFO_B = ["Turma", "Phase", "Professor", "student_id", "Nome Aluno", "Situação"]
-TODAS_COLS_A  = COLUNAS_INFO_A + COLUNAS_A + COLUNAS_EXTRA
-TODAS_COLS_B  = COLUNAS_INFO_B + COLUNAS_B + COLUNAS_EXTRA
+COLUNAS_A      = build_colunas_a()
+COLUNAS_B      = [f"{pre} - {comp}" for _, (pre, comp) in PROVAS_B_SIMPLES.items()] + ["Média Geral Av"]
+
+# Info columns — Action Plan e Comments logo após Média Geral
+COLUNAS_INFO_A = ["Turma", "Phase", "Professor", "student_id", "Nome Aluno", "Situação", "Média Geral", "Action Plan", "Coordinator's Comment", "⚠️ Alerta", "Status"]
+COLUNAS_INFO_B = ["Turma", "Phase", "Professor", "student_id", "Nome Aluno", "Situação", "Action Plan", "Coordinator's Comment", "⚠️ Alerta", "Status"]
+TODAS_COLS_A   = COLUNAS_INFO_A + COLUNAS_A
+TODAS_COLS_B   = COLUNAS_INFO_B + COLUNAS_B
+
+COLUNAS_OCULTAS = {"Phase", "student_id", "Professor", "Situação", "⚠️ Alerta"}
+
+# Colunas de nota por prova (para calcular alerta)
+COLS_PC    = ["PC - Speaking/Oral", "PC - Gramática & Vocab", "PC - Homework"]
+COLS_MID   = ["Mid - Homework", "Mid - Reading", "Mid - Gramática & Vocab", "Mid - Listening", "Mid - Writing", "Mid - Speaking/Oral"]
+COLS_FINAL = ["Final - Homework", "Final - Reading", "Final - Gramática & Vocab", "Final - Listening", "Final - Writing", "Final - Speaking/Oral"]
+COLS_AV    = ["Av1 - Reading And Use of English", "Av2 - Writing", "Av3 - Listening", "Av4 - Homework"]
+
+PROVA_COLS_MAP = {
+    "Progress Check": COLS_PC,
+    "Mid-term":       COLS_PC + COLS_MID,
+    "Final":          COLS_PC + COLS_MID + COLS_FINAL,
+    "Avaliação 4":    COLS_AV,
+}
 
 # ─── Funções API ───────────────────────────────────────────────────────────────
-def headers(token):
+def api_headers(token):
     return {"Accept": "application/json", "Content-Type": "application/json", "api_key": token}
 
 def get_phases_map(token):
-    r = requests.get(f"{BASE_URL}/phases", headers=headers(token))
+    r = requests.get(f"{BASE_URL}/phases", headers=api_headers(token))
     return {p["name"]: p["phase_id"] for p in r.json()} if r.ok else {}
 
 def get_turmas(token, semestre):
-    r = requests.get(f"{BASE_URL}/classes", headers=headers(token))
+    r = requests.get(f"{BASE_URL}/classes", headers=api_headers(token))
     if not r.ok:
         return []
     return [t for t in r.json() if t.get("situation") == SITUATION and semestre in t.get("name", "")]
 
 def get_detalhes(token, class_id):
-    r = requests.post(f"{BASE_URL}/classes", headers=headers(token), json={"class_id": class_id})
+    r = requests.post(f"{BASE_URL}/classes", headers=api_headers(token), json={"class_id": class_id})
     return r.json() if r.ok else None
 
 def get_nome_aluno(token, student_id):
-    r = requests.post(f"{BASE_URL}/students", headers=headers(token), json={"student_id": student_id})
+    r = requests.post(f"{BASE_URL}/students", headers=api_headers(token), json={"student_id": student_id})
     if not r.ok:
         return ""
     d = r.json()
@@ -106,7 +131,7 @@ def get_nome_aluno(token, student_id):
     return d.get("name") or ""
 
 def get_notas(token, student_id, class_id, phase_id):
-    r = requests.post(f"{BASE_URL}/scores", headers=headers(token),
+    r = requests.post(f"{BASE_URL}/scores", headers=api_headers(token),
                       json={"student_id": student_id, "class_id": class_id, "phase_id": phase_id})
     if not r.ok:
         return None
@@ -119,7 +144,7 @@ def extrair_notas_a(notas_data):
     resultado = {}
     if not notas_data:
         return resultado
-    grades = notas_data.get("grades", [])
+    grades    = notas_data.get("grades", [])
     por_prova = {}
     for g in grades:
         if not g.get("score"):
@@ -166,7 +191,7 @@ def extrair_notas_b(notas_data):
     resultado = {}
     if not notas_data:
         return resultado
-    grades = notas_data.get("grades", [])
+    grades   = notas_data.get("grades", [])
     notas_av = {}
     for g in grades:
         if not g.get("score"):
@@ -190,25 +215,38 @@ def extrair_notas_b(notas_data):
         resultado["Média Geral Av"] = str(round(sum(vals)/len(vals), 2)).replace(".", ",")
     return resultado
 
+def calcular_alerta(linha, prova_lancada, formato_b):
+    """Retorna ⚠️ se alguma nota esperada estiver vazia ou < 7."""
+    if formato_b:
+        cols_verificar = COLS_AV
+    else:
+        cols_verificar = PROVA_COLS_MAP.get(prova_lancada, COLS_PC)
+
+    for col in cols_verificar:
+        val = linha.get(col, "")
+        if val == "" or val is None:
+            return "⚠️"
+        try:
+            if float(str(val).replace(",", ".")) < 7:
+                return "⚠️"
+        except:
+            pass
+    return ""
+
 # ─── Mescla com planilha existente ────────────────────────────────────────────
 def mesclar_com_existente(novos_dados_por_prof, arquivo_existente):
-    """
-    Lê planilha existente, preserva Action Plan, Coordinator's Comment.
-    Alunos que saíram da turma ficam com Status = 'Não consta mais na turma'.
-    """
-    wb_old = load_workbook(arquivo_existente)
-    comentarios = {}  # {(sheet_name, student_id): {Action Plan, Coordinator's Comment}}
+    wb_old      = load_workbook(arquivo_existente)
+    comentarios = {}
 
     for sheet_name in wb_old.sheetnames:
-        ws = wb_old[sheet_name]
+        ws          = wb_old[sheet_name]
         headers_row = [c.value for c in ws[1]]
         try:
-            idx_sid  = headers_row.index("student_id")
-            idx_ap   = headers_row.index("Action Plan") if "Action Plan" in headers_row else None
-            idx_cc   = headers_row.index("Coordinator's Comment") if "Coordinator's Comment" in headers_row else None
+            idx_sid = headers_row.index("student_id")
+            idx_ap  = headers_row.index("Action Plan") if "Action Plan" in headers_row else None
+            idx_cc  = headers_row.index("Coordinator's Comment") if "Coordinator's Comment" in headers_row else None
         except:
             continue
-
         for row in ws.iter_rows(min_row=2, values_only=True):
             sid = row[idx_sid] if idx_sid < len(row) else None
             if not sid:
@@ -218,35 +256,22 @@ def mesclar_com_existente(novos_dados_por_prof, arquivo_existente):
                 "Coordinator's Comment": row[idx_cc] if idx_cc and idx_cc < len(row) else "",
             }
 
-    # IDs ativos por aba
-    ids_ativos_por_aba = {}
     for prof, fmts in novos_dados_por_prof.items():
         for fmt, linhas in fmts.items():
             if not linhas:
                 continue
-            sufixo   = f" - {fmt}" if fmts["A"] and fmts["B"] else ""
-            nome_aba = (prof + sufixo)[:31]
-            for ch in ['/', '\\', '*', '?', ':', '[', ']']:
-                nome_aba = nome_aba.replace(ch, '-')
-            ids_ativos_por_aba[nome_aba] = {l["student_id"] for l in linhas}
-
-    # Aplica comentários e status
-    for prof, fmts in novos_dados_por_prof.items():
-        for fmt, linhas in fmts.items():
-            sufixo   = f" - {fmt}" if fmts["A"] and fmts["B"] else ""
+            sufixo   = f" - {fmt}" if bool(fmts["A"]) and bool(fmts["B"]) else ""
             nome_aba = (prof + sufixo)[:31]
             for ch in ['/', '\\', '*', '?', ':', '[', ']']:
                 nome_aba = nome_aba.replace(ch, '-')
 
+            ids_novos = {l["student_id"] for l in linhas}
             for linha in linhas:
-                sid  = linha["student_id"]
-                chave = (nome_aba, int(sid))
+                chave = (nome_aba, int(linha["student_id"]))
                 if chave in comentarios:
                     linha["Action Plan"]           = comentarios[chave]["Action Plan"] or ""
                     linha["Coordinator's Comment"] = comentarios[chave]["Coordinator's Comment"] or ""
 
-            # Alunos que saíram
-            ids_novos = {l["student_id"] for l in linhas}
             todas_cols = TODAS_COLS_A if fmt == "A" else TODAS_COLS_B
             for (sn, sid), coment in comentarios.items():
                 if sn == nome_aba and sid not in ids_novos:
@@ -260,11 +285,11 @@ def mesclar_com_existente(novos_dados_por_prof, arquivo_existente):
     return novos_dados_por_prof
 
 # ─── Formatação Excel ──────────────────────────────────────────────────────────
-FILL_HEADER  = PatternFill("solid", fgColor="1A2B6B")
-FILL_RED     = PatternFill("solid", fgColor="FFCCCC")
-FILL_YELLOW  = PatternFill("solid", fgColor="FFFACD")
-FILL_GRAY    = PatternFill("solid", fgColor="EEEEEE")
-FONT_WHITE   = Font(bold=True, color="FFFFFF")
+FILL_HEADER = PatternFill("solid", fgColor="1A2B6B")
+FILL_RED    = PatternFill("solid", fgColor="FFCCCC")
+FILL_YELLOW = PatternFill("solid", fgColor="FFFACD")
+FILL_GRAY   = PatternFill("solid", fgColor="EEEEEE")
+FONT_WHITE  = Font(bold=True, color="FFFFFF")
 
 def is_nota_col(col):
     return any(col.startswith(p) for p in ("PC -","Mid -","Final -","Av1 -","Av2 -","Av3 -","Av4 -","Média"))
@@ -275,20 +300,18 @@ def parse_nota(val):
     except:
         return None
 
-def formatar_aba(ws, colunas):
+def formatar_aba(ws, colunas, prova_lancada, formato_b):
+    # Cabeçalho
     for cell in ws[1]:
         cell.fill = FILL_HEADER
         cell.font = FONT_WHITE
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
 
-    nota_cols   = {i+1 for i, c in enumerate(colunas) if is_nota_col(c)}
-    status_col  = next((i+1 for i, c in enumerate(colunas) if c == "Status"), None)
+    nota_cols  = {i+1 for i, c in enumerate(colunas) if is_nota_col(c)}
+    status_col = next((i+1 for i, c in enumerate(colunas) if c == "Status"), None)
 
     for row in ws.iter_rows(min_row=2):
-        # Linhas de alunos que saíram → cinza
-        status_val = row[status_col-1].value if status_col else ""
-        saiu = "Não consta" in str(status_val or "")
-
+        saiu = "Não consta" in str(row[status_col-1].value or "") if status_col else False
         for cell in row:
             if saiu:
                 cell.fill = FILL_GRAY
@@ -301,18 +324,34 @@ def formatar_aba(ws, colunas):
             elif n < 7:
                 cell.fill = FILL_RED
 
+    # Auto-width
     for col in ws.columns:
         max_len = max((len(str(c.value or "")) for c in col), default=10)
         ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 2, 35)
 
+    # Filtro automático
     ws.auto_filter.ref = ws.dimensions
-    ws.freeze_panes = "H2"
+
+    # Aplica filtro na coluna Alerta — mostra só ⚠️
+    alerta_idx = next((i for i, c in enumerate(colunas) if c == "⚠️ Alerta"), None)
+    if alerta_idx is not None:
+        from openpyxl.worksheet.filters import AutoFilter, FilterColumn, Filters
+        ws.auto_filter.filterColumn.append(
+            FilterColumn(colId=alerta_idx, filters=Filters(filter=["⚠️"]))
+        )
+
+    # Freeze até Média Geral (inclusive) — conta colunas visíveis até lá
+    media_geral_idx = next((i+1 for i, c in enumerate(colunas) if c in ("Média Geral", "Média Geral Av")), None)
+    if media_geral_idx:
+        ws.freeze_panes = get_column_letter(media_geral_idx + 1) + "2"
+
+    # Colunas ocultas
     for i, col in enumerate(colunas, start=1):
-        if col in ("Phase", "student_id"):
+        if col in COLUNAS_OCULTAS:
             ws.column_dimensions[get_column_letter(i)].hidden = True
 
-# ─── Geração da planilha ───────────────────────────────────────────────────────
-def coletar_dados(token, semestre, progress_bar, status_text):
+# ─── Coleta de dados ───────────────────────────────────────────────────────────
+def coletar_dados(token, semestre, prova_lancada, progress_bar, status_text):
     phases_map = get_phases_map(token)
     turmas     = get_turmas(token, semestre)
     if not turmas:
@@ -364,17 +403,20 @@ def coletar_dados(token, semestre, progress_bar, status_text):
                 "Turma": nome_turma, "Phase": phase_nome or "",
                 "Professor": professor, "student_id": sid,
                 "Nome Aluno": cache_nomes[sid], "Situação": situacao,
+                "Action Plan": "", "Coordinator's Comment": "",
                 "Status": "",
             }
             linha.update(notas_dict)
             for col in todas_cols:
                 linha.setdefault(col, "")
+
+            linha["⚠️ Alerta"] = calcular_alerta(linha, prova_lancada, formato_b)
             dados[professor][fmt].append(linha)
 
     progress_bar.progress(1.0)
     return dados, None
 
-def exportar_excel(dados):
+def exportar_excel(dados, prova_lancada):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         for professor, fmts in sorted(dados.items()):
@@ -383,12 +425,13 @@ def exportar_excel(dados):
                     continue
                 todas_cols = TODAS_COLS_A if fmt == "A" else TODAS_COLS_B
                 df         = pd.DataFrame(linhas, columns=todas_cols)
-                sufixo     = f" - {fmt}" if fmts["A"] and fmts["B"] else ""
+                sufixo     = f" - {fmt}" if bool(fmts["A"]) and bool(fmts["B"]) else ""
                 nome_aba   = (professor + sufixo)[:31]
                 for ch in ['/', '\\', '*', '?', ':', '[', ']']:
                     nome_aba = nome_aba.replace(ch, '-')
                 df.to_excel(writer, sheet_name=nome_aba, index=False)
-                formatar_aba(writer.sheets[nome_aba], todas_cols)
+                formato_b = fmt == "B"
+                formatar_aba(writer.sheets[nome_aba], todas_cols, prova_lancada, formato_b)
     output.seek(0)
     return output
 
@@ -417,64 +460,34 @@ st.markdown("""
     }
     .header-text h1 {
         font-family: 'Barlow Condensed', sans-serif;
-        font-size: 1.8rem;
-        font-weight: 700;
-        margin: 0;
-        color: #1a2b6b;
-        letter-spacing: 0.3px;
+        font-size: 1.8rem; font-weight: 700;
+        margin: 0; color: #1a2b6b; letter-spacing: 0.3px;
     }
     .header-text p { margin: 0.1rem 0 0; color: #888; font-size: 0.85rem; }
     .header img { height: 48px; }
 
     .unit-card {
-        background: white;
-        border: 2px solid #e8edf8;
-        border-radius: 14px;
-        padding: 1.5rem 1rem 1rem;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(26,43,107,0.06);
-    }
-    .unit-name {
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: #1a2b6b;
-        font-family: 'Barlow Condensed', sans-serif;
-        letter-spacing: 0.3px;
-        margin-bottom: 0.15rem;
-    }
-    .unit-sem { font-size: 0.75rem; color: #aaa; margin-bottom: 1rem; }
-
-    div[data-testid="stButton"] button {
-        background: #1a2b6b !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        width: 100% !important;
-    }
-    div[data-testid="stButton"] button:hover { background: #e32119 !important; }
-
-    .sem-badge {
-        display: inline-block;
-        background: #f0f3ff;
-        color: #1a2b6b;
-        padding: 0.2rem 0.9rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        margin-bottom: 1.5rem;
-    }
-    .section-title {
-        font-family: 'Barlow Condensed', sans-serif;
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #1a2b6b;
+        background: white; border: 2px solid #e8edf8;
+        border-radius: 14px; padding: 1.2rem 1rem 0.8rem;
+        text-align: center; box-shadow: 0 2px 8px rgba(26,43,107,0.06);
         margin-bottom: 0.5rem;
     }
+    .unit-name {
+        font-size: 1.2rem; font-weight: 700; color: #1a2b6b;
+        font-family: 'Barlow Condensed', sans-serif; margin-bottom: 0.1rem;
+    }
+    .unit-sem { font-size: 0.75rem; color: #aaa; margin-bottom: 0.8rem; }
+
+    div[data-testid="stButton"] button {
+        background: #1a2b6b !important; color: white !important;
+        border: none !important; border-radius: 8px !important;
+        font-weight: 600 !important; width: 100% !important;
+        margin-bottom: 4px !important;
+    }
+    div[data-testid="stButton"] button:hover { background: #e32119 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# Header
 def img_to_b64(path):
     try:
         return base64.b64encode(Path(path).read_bytes()).decode()
@@ -494,7 +507,16 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Cards das unidades
+# ─── Seletor de prova lançada ──────────────────────────────────────────────────
+prova_lancada = st.radio(
+    "📝 Qual é a última prova lançada?",
+    ["Progress Check", "Mid-term", "Final"],
+    horizontal=True
+)
+
+st.markdown("---")
+
+# ─── Cards das unidades ────────────────────────────────────────────────────────
 cols = st.columns(4)
 for idx, (nome, config) in enumerate(UNIDADES.items()):
     with cols[idx]:
@@ -509,7 +531,34 @@ for idx, (nome, config) in enumerate(UNIDADES.items()):
         if st.button("🔄 Atualizar Existente", key=f"atualizar_{idx}"):
             st.session_state[f"acao_{idx}"] = "atualizar"
 
-# Processamento
+# ─── Botão baixar todas ────────────────────────────────────────────────────────
+st.markdown("---")
+if st.button("📦 Baixar Todas as Unidades (ZIP)", use_container_width=True):
+    st.session_state["baixar_todas"] = True
+
+if st.session_state.get("baixar_todas"):
+    st.session_state["baixar_todas"] = False
+    st.markdown("### 📦 Gerando planilhas de todas as unidades...")
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for nome_u, config_u in UNIDADES.items():
+            pb_u      = st.progress(0)
+            status_u  = st.empty()
+            dados_u, erro_u = coletar_dados(config_u["token"], config_u["semestre"], prova_lancada, pb_u, status_u)
+            if not erro_u:
+                arq_u   = exportar_excel(dados_u, prova_lancada)
+                sem_fmt = config_u["semestre"].replace("/", ".")
+                zf.writestr(f"mapadenotas_{nome_u}_{sem_fmt}.xlsx", arq_u.read())
+    zip_buffer.seek(0)
+    st.download_button(
+        "⬇️ Baixar ZIP com todas as unidades",
+        data=zip_buffer,
+        file_name="mapadenotas_todas_unidades.zip",
+        mime="application/zip",
+        key="download_todas"
+    )
+
+# ─── Processamento por unidade ─────────────────────────────────────────────────
 for idx, (nome, config) in enumerate(UNIDADES.items()):
     acao = st.session_state.get(f"acao_{idx}")
     if not acao:
@@ -521,9 +570,8 @@ for idx, (nome, config) in enumerate(UNIDADES.items()):
     arquivo_existente = None
     if acao == "atualizar":
         uploaded = st.file_uploader(
-            "Faça upload da planilha anterior para preservar os comentários:",
-            type=["xlsx"],
-            key=f"upload_{idx}"
+            "Faça upload da planilha anterior:",
+            type=["xlsx"], key=f"upload_{idx}"
         )
         if not uploaded:
             st.info("📎 Aguardando upload da planilha existente...")
@@ -534,22 +582,21 @@ for idx, (nome, config) in enumerate(UNIDADES.items()):
         progress_bar = st.progress(0)
         status_text  = st.empty()
 
-        dados, erro = coletar_dados(config["token"], config["semestre"], progress_bar, status_text)
+        dados, erro = coletar_dados(config["token"], config["semestre"], prova_lancada, progress_bar, status_text)
 
         if erro:
             st.error(f"❌ {erro}")
         else:
             if arquivo_existente:
-                status_text.text("🔄 Mesclando com planilha existente...")
+                status_text.text("🔄 Mesclando comentários...")
                 dados = mesclar_com_existente(dados, arquivo_existente)
 
-            status_text.text("✅ Gerando arquivo Excel...")
-            arquivo_final = exportar_excel(dados)
+            status_text.text("✅ Gerando arquivo...")
+            arquivo_final = exportar_excel(dados, prova_lancada)
+            sem_fmt       = config["semestre"].replace("/", ".")
+            nome_arq      = f"mapadenotas_{nome}_{sem_fmt}.xlsx"
 
-            sem_fmt    = config["semestre"].replace("/", ".")
-            nome_arq   = f"mapadenotas_{nome}_{sem_fmt}.xlsx"
-
-            st.success(f"✅ Planilha gerada com sucesso!")
+            st.success("✅ Planilha gerada com sucesso!")
             st.download_button(
                 label=f"⬇️ Baixar {nome_arq}",
                 data=arquivo_final,
