@@ -310,92 +310,128 @@ def gerar_planilha(nome_unidade, token, progress_bar, status_text):
 
 # ─── Interface Streamlit ───────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Notas — Cultura Inglesa",
+    page_title="Cultura Inglesa — Mapa de Notas",
     page_icon="📊",
     layout="wide"
 )
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
 
     html, body, [class*="css"] {
-        font-family: 'DM Sans', sans-serif;
+        font-family: 'Barlow', sans-serif;
+        background-color: #f4f6fb;
     }
-    .main { background-color: #f8f7ff; }
 
     .header {
-        background: linear-gradient(135deg, #6200a8 0%, #9c27b0 100%);
-        padding: 2rem 2.5rem;
+        background: linear-gradient(135deg, #1a2b6b 0%, #223080 100%);
+        padding: 1.8rem 2.5rem;
         border-radius: 16px;
-        margin-bottom: 2rem;
-        color: white;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        box-shadow: 0 4px 24px rgba(26,43,107,0.18);
     }
-    .header h1 {
-        font-family: 'DM Serif Display', serif;
-        font-size: 2rem;
+    .header-text h1 {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1.9rem;
+        font-weight: 700;
         margin: 0;
         color: white;
+        letter-spacing: 0.5px;
     }
-    .header p {
-        margin: 0.25rem 0 0;
-        opacity: 0.85;
-        font-size: 0.95rem;
+    .header-text p {
+        margin: 0.2rem 0 0;
+        color: rgba(255,255,255,0.75);
+        font-size: 0.9rem;
     }
+    .header img { height: 52px; }
 
     .unit-card {
         background: white;
-        border: 1px solid #e8e0f0;
-        border-radius: 12px;
-        padding: 1.5rem;
+        border: 2px solid #e8edf8;
+        border-radius: 14px;
+        padding: 1.5rem 1rem;
         text-align: center;
-        transition: box-shadow 0.2s;
+        transition: all 0.2s;
+        box-shadow: 0 2px 8px rgba(26,43,107,0.06);
     }
-    .unit-card:hover { box-shadow: 0 4px 20px rgba(98,0,168,0.12); }
+    .unit-card:hover {
+        border-color: #1a2b6b;
+        box-shadow: 0 6px 24px rgba(26,43,107,0.14);
+        transform: translateY(-2px);
+    }
     .unit-name {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #2d1b4e;
-        margin-bottom: 0.25rem;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #1a2b6b;
+        margin-bottom: 0.2rem;
+        font-family: 'Barlow Condensed', sans-serif;
+        letter-spacing: 0.3px;
     }
     .unit-sub {
-        font-size: 0.8rem;
-        color: #888;
+        font-size: 0.78rem;
+        color: #9aa3b8;
         margin-bottom: 1rem;
     }
     .stButton > button {
-        background: #6200a8 !important;
+        background: #1a2b6b !important;
         color: white !important;
         border: none !important;
         border-radius: 8px !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
+        font-family: 'Barlow', sans-serif !important;
         width: 100% !important;
+        transition: background 0.2s !important;
     }
     .stButton > button:hover {
-        background: #7b00d4 !important;
+        background: #e32119 !important;
     }
     .semestre-badge {
         display: inline-block;
-        background: #f0e6ff;
-        color: #6200a8;
-        padding: 0.2rem 0.8rem;
+        background: #e8edf8;
+        color: #1a2b6b;
+        padding: 0.25rem 1rem;
         border-radius: 20px;
-        font-size: 0.8rem;
+        font-size: 0.82rem;
         font-weight: 600;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.8rem;
+        letter-spacing: 0.5px;
+    }
+    .divider {
+        border: none;
+        border-top: 2px solid #e8edf8;
+        margin: 1.5rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Header
+# Header com logo
+import base64
+from pathlib import Path
+
+def img_to_base64(path):
+    try:
+        return base64.b64encode(Path(path).read_bytes()).decode()
+    except:
+        return None
+
+logo_b64 = img_to_base64("logo.png")
+logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else ""
+
 st.markdown(f"""
 <div class="header">
-    <h1>📊 Cultura Inglesa — Notas</h1>
-    <p>Extração automática de notas via Sponte API</p>
+    {logo_html}
+    <div class="header-text">
+        <h1>Mapa de Notas</h1>
+        <p>Extração automática de notas via Sponte API</p>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown(f'<div class="semestre-badge">Semestre {SEMESTRE}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="semestre-badge">📅 Semestre {SEMESTRE}</div>', unsafe_allow_html=True)
 
 # Cards das unidades
 cols = st.columns(4)
@@ -405,7 +441,7 @@ for idx, (nome, config) in enumerate(UNIDADES.items()):
         st.markdown(f"""
         <div class="unit-card">
             <div class="unit-name">{nome_limpo}</div>
-            <div class="unit-sub">Cód. {config['codigo']}</div>
+            <div class="unit-sub">Cód. {config["codigo"]}</div>
         </div>
         """, unsafe_allow_html=True)
 
