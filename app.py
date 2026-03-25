@@ -13,10 +13,10 @@ from openpyxl.utils import get_column_letter
 
 # ─── Configuração das unidades ─────────────────────────────────────────────────
 UNIDADES = {
-    "🏫 Young":      {"token": "LcC5k0eOQEdY", "codigo": "71976"},
-    "🏫 Boa Viagem": {"token": "D2vEp1qCSPpv", "codigo": "71961"},
-    "🏫 Setúbal":    {"token": "UO7c764YXSRU", "codigo": "71977"},
-    "🏫 Natal":      {"token": "1fvBagK0xYnp", "codigo": "71978"},
+    "🏫 Young":      {"token": st.secrets["YOUNG_TOKEN"],      "codigo": "71976"},
+    "🏫 Boa Viagem": {"token": st.secrets["BOA_VIAGEM_TOKEN"], "codigo": "71961"},
+    "🏫 Setúbal":    {"token": st.secrets["SETUBAL_TOKEN"],    "codigo": "71977"},
+    "🏫 Natal":      {"token": st.secrets["NATAL_TOKEN"],      "codigo": "71978"},
 }
 
 SEMESTRE  = "2026.1"
