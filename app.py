@@ -1,6 +1,6 @@
 """
-Sponte Notas — App Streamlit
-Gera planilha de notas por unidade com um clique.
+Cultura Inglesa — Mapa de Notas
+App Streamlit com suporte a nova planilha e atualização de planilha existente.
 """
 
 import streamlit as st
@@ -8,22 +8,24 @@ import requests
 import pandas as pd
 import time
 import io
+import base64
+from pathlib import Path
+from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 
 # ─── Configuração das unidades ─────────────────────────────────────────────────
 UNIDADES = {
-    "🏫 Young":      {"token": st.secrets["YOUNG_TOKEN"],      "codigo": "71976"},
-    "🏫 Boa Viagem": {"token": st.secrets["BOA_VIAGEM_TOKEN"], "codigo": "71961"},
-    "🏫 Setúbal":    {"token": st.secrets["SETUBAL_TOKEN"],    "codigo": "71977"},
-    "🏫 Natal":      {"token": st.secrets["NATAL_TOKEN"],      "codigo": "71978"},
+    "Young":      {"token": st.secrets["YOUNG_TOKEN"],      "codigo": "71976", "semestre": "2026.1"},
+    "Boa Viagem": {"token": st.secrets["BOA_VIAGEM_TOKEN"], "codigo": "71961", "semestre": "2026.1"},
+    "Setúbal":    {"token": st.secrets["SETUBAL_TOKEN"],    "codigo": "71977", "semestre": "2026.1"},
+    "Natal":      {"token": st.secrets["NATAL_TOKEN"],      "codigo": "71978", "semestre": "2026/01"},
 }
 
-SEMESTRE  = "2026.1"
-SITUATION = 1
 BASE_URL  = "https://webservices.sponteweb.com.br/WSApiSponteRest/api"
+SITUATION = 1
 
-# ─── Componentes e estrutura ───────────────────────────────────────────────────
+# ─── Estrutura de notas ────────────────────────────────────────────────────────
 NOME_CURTO_A = {
     "Speaking / Oral (PC)":                    "Speaking/Oral",
     "Language / Gramática & Vocabulário (PC)": "Gramática & Vocab",
@@ -55,7 +57,7 @@ PHASES_FORMATO_B = {
     "VANTAGE 1 (F)", "VANTAGE 2 (F)",
     "UPPER INTERMEDIATE 3 (F)",
 }
-COLUNAS_EXTRA = ["Action Plan", "Coordinator's Comment"]
+COLUNAS_EXTRA = ["Status", "Action Plan", "Coordinator's Comment"]
 
 def build_colunas_a():
     cols = []
@@ -69,12 +71,12 @@ def build_colunas_a():
         cols.append(f"Média {pre}")
     return cols
 
-COLUNAS_A    = build_colunas_a()
-COLUNAS_B    = [f"{pre} - {comp}" for _, (pre, comp) in PROVAS_B_SIMPLES.items()] + ["Média Geral Av"]
+COLUNAS_A     = build_colunas_a()
+COLUNAS_B     = [f"{pre} - {comp}" for _, (pre, comp) in PROVAS_B_SIMPLES.items()] + ["Média Geral Av"]
 COLUNAS_INFO_A = ["Turma", "Phase", "Professor", "student_id", "Nome Aluno", "Situação", "Média Geral"]
 COLUNAS_INFO_B = ["Turma", "Phase", "Professor", "student_id", "Nome Aluno", "Situação"]
-TODAS_COLS_A = COLUNAS_INFO_A + COLUNAS_A + COLUNAS_EXTRA
-TODAS_COLS_B = COLUNAS_INFO_B + COLUNAS_B + COLUNAS_EXTRA
+TODAS_COLS_A  = COLUNAS_INFO_A + COLUNAS_A + COLUNAS_EXTRA
+TODAS_COLS_B  = COLUNAS_INFO_B + COLUNAS_B + COLUNAS_EXTRA
 
 # ─── Funções API ───────────────────────────────────────────────────────────────
 def headers(token):
@@ -84,11 +86,11 @@ def get_phases_map(token):
     r = requests.get(f"{BASE_URL}/phases", headers=headers(token))
     return {p["name"]: p["phase_id"] for p in r.json()} if r.ok else {}
 
-def get_turmas(token):
+def get_turmas(token, semestre):
     r = requests.get(f"{BASE_URL}/classes", headers=headers(token))
     if not r.ok:
         return []
-    return [t for t in r.json() if t.get("situation") == SITUATION and SEMESTRE in t.get("name", "")]
+    return [t for t in r.json() if t.get("situation") == SITUATION and semestre in t.get("name", "")]
 
 def get_detalhes(token, class_id):
     r = requests.post(f"{BASE_URL}/classes", headers=headers(token), json={"class_id": class_id})
@@ -188,11 +190,81 @@ def extrair_notas_b(notas_data):
         resultado["Média Geral Av"] = str(round(sum(vals)/len(vals), 2)).replace(".", ",")
     return resultado
 
+# ─── Mescla com planilha existente ────────────────────────────────────────────
+def mesclar_com_existente(novos_dados_por_prof, arquivo_existente):
+    """
+    Lê planilha existente, preserva Action Plan, Coordinator's Comment.
+    Alunos que saíram da turma ficam com Status = 'Não consta mais na turma'.
+    """
+    wb_old = load_workbook(arquivo_existente)
+    comentarios = {}  # {(sheet_name, student_id): {Action Plan, Coordinator's Comment}}
+
+    for sheet_name in wb_old.sheetnames:
+        ws = wb_old[sheet_name]
+        headers_row = [c.value for c in ws[1]]
+        try:
+            idx_sid  = headers_row.index("student_id")
+            idx_ap   = headers_row.index("Action Plan") if "Action Plan" in headers_row else None
+            idx_cc   = headers_row.index("Coordinator's Comment") if "Coordinator's Comment" in headers_row else None
+        except:
+            continue
+
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            sid = row[idx_sid] if idx_sid < len(row) else None
+            if not sid:
+                continue
+            comentarios[(sheet_name, int(sid))] = {
+                "Action Plan":           row[idx_ap] if idx_ap and idx_ap < len(row) else "",
+                "Coordinator's Comment": row[idx_cc] if idx_cc and idx_cc < len(row) else "",
+            }
+
+    # IDs ativos por aba
+    ids_ativos_por_aba = {}
+    for prof, fmts in novos_dados_por_prof.items():
+        for fmt, linhas in fmts.items():
+            if not linhas:
+                continue
+            sufixo   = f" - {fmt}" if fmts["A"] and fmts["B"] else ""
+            nome_aba = (prof + sufixo)[:31]
+            for ch in ['/', '\\', '*', '?', ':', '[', ']']:
+                nome_aba = nome_aba.replace(ch, '-')
+            ids_ativos_por_aba[nome_aba] = {l["student_id"] for l in linhas}
+
+    # Aplica comentários e status
+    for prof, fmts in novos_dados_por_prof.items():
+        for fmt, linhas in fmts.items():
+            sufixo   = f" - {fmt}" if fmts["A"] and fmts["B"] else ""
+            nome_aba = (prof + sufixo)[:31]
+            for ch in ['/', '\\', '*', '?', ':', '[', ']']:
+                nome_aba = nome_aba.replace(ch, '-')
+
+            for linha in linhas:
+                sid  = linha["student_id"]
+                chave = (nome_aba, int(sid))
+                if chave in comentarios:
+                    linha["Action Plan"]           = comentarios[chave]["Action Plan"] or ""
+                    linha["Coordinator's Comment"] = comentarios[chave]["Coordinator's Comment"] or ""
+
+            # Alunos que saíram
+            ids_novos = {l["student_id"] for l in linhas}
+            todas_cols = TODAS_COLS_A if fmt == "A" else TODAS_COLS_B
+            for (sn, sid), coment in comentarios.items():
+                if sn == nome_aba and sid not in ids_novos:
+                    linha_saiu = {col: "" for col in todas_cols}
+                    linha_saiu["student_id"]              = sid
+                    linha_saiu["Status"]                  = "⚠️ Não consta mais na turma"
+                    linha_saiu["Action Plan"]             = coment["Action Plan"] or ""
+                    linha_saiu["Coordinator's Comment"]   = coment["Coordinator's Comment"] or ""
+                    linhas.append(linha_saiu)
+
+    return novos_dados_por_prof
+
 # ─── Formatação Excel ──────────────────────────────────────────────────────────
-FILL_HEADER = PatternFill("solid", fgColor="6200A8")
-FILL_RED    = PatternFill("solid", fgColor="FFCCCC")
-FILL_YELLOW = PatternFill("solid", fgColor="FFFACD")
-FONT_WHITE  = Font(bold=True, color="FFFFFF")
+FILL_HEADER  = PatternFill("solid", fgColor="1A2B6B")
+FILL_RED     = PatternFill("solid", fgColor="FFCCCC")
+FILL_YELLOW  = PatternFill("solid", fgColor="FFFACD")
+FILL_GRAY    = PatternFill("solid", fgColor="EEEEEE")
+FONT_WHITE   = Font(bold=True, color="FFFFFF")
 
 def is_nota_col(col):
     return any(col.startswith(p) for p in ("PC -","Mid -","Final -","Av1 -","Av2 -","Av3 -","Av4 -","Média"))
@@ -208,9 +280,19 @@ def formatar_aba(ws, colunas):
         cell.fill = FILL_HEADER
         cell.font = FONT_WHITE
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
-    nota_cols = {i+1 for i, c in enumerate(colunas) if is_nota_col(c)}
+
+    nota_cols   = {i+1 for i, c in enumerate(colunas) if is_nota_col(c)}
+    status_col  = next((i+1 for i, c in enumerate(colunas) if c == "Status"), None)
+
     for row in ws.iter_rows(min_row=2):
+        # Linhas de alunos que saíram → cinza
+        status_val = row[status_col-1].value if status_col else ""
+        saiu = "Não consta" in str(status_val or "")
+
         for cell in row:
+            if saiu:
+                cell.fill = FILL_GRAY
+                continue
             if cell.column not in nota_cols:
                 continue
             n = parse_nota(cell.value)
@@ -218,9 +300,11 @@ def formatar_aba(ws, colunas):
                 cell.fill = FILL_YELLOW
             elif n < 7:
                 cell.fill = FILL_RED
+
     for col in ws.columns:
         max_len = max((len(str(c.value or "")) for c in col), default=10)
         ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 2, 35)
+
     ws.auto_filter.ref = ws.dimensions
     ws.freeze_panes = "H2"
     for i, col in enumerate(colunas, start=1):
@@ -228,10 +312,9 @@ def formatar_aba(ws, colunas):
             ws.column_dimensions[get_column_letter(i)].hidden = True
 
 # ─── Geração da planilha ───────────────────────────────────────────────────────
-def gerar_planilha(nome_unidade, token, progress_bar, status_text):
+def coletar_dados(token, semestre, progress_bar, status_text):
     phases_map = get_phases_map(token)
-    turmas     = get_turmas(token)
-
+    turmas     = get_turmas(token, semestre)
     if not turmas:
         return None, "Nenhuma turma aberta encontrada."
 
@@ -242,8 +325,8 @@ def gerar_planilha(nome_unidade, token, progress_bar, status_text):
     for i, turma in enumerate(turmas):
         class_id   = turma["class_id"]
         nome_turma = turma["name"]
-        status_text.text(f"⏳ Processando turma {i+1}/{total}: {nome_turma}")
-        progress_bar.progress((i) / total)
+        status_text.text(f"⏳ Turma {i+1}/{total}: {nome_turma}")
+        progress_bar.progress(i / total)
 
         detalhes = get_detalhes(token, class_id)
         if not detalhes:
@@ -281,6 +364,7 @@ def gerar_planilha(nome_unidade, token, progress_bar, status_text):
                 "Turma": nome_turma, "Phase": phase_nome or "",
                 "Professor": professor, "student_id": sid,
                 "Nome Aluno": cache_nomes[sid], "Situação": situacao,
+                "Status": "",
             }
             linha.update(notas_dict)
             for col in todas_cols:
@@ -288,8 +372,9 @@ def gerar_planilha(nome_unidade, token, progress_bar, status_text):
             dados[professor][fmt].append(linha)
 
     progress_bar.progress(1.0)
-    status_text.text("✅ Concluído! Gerando arquivo...")
+    return dados, None
 
+def exportar_excel(dados):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         for professor, fmts in sorted(dados.items()):
@@ -304,11 +389,10 @@ def gerar_planilha(nome_unidade, token, progress_bar, status_text):
                     nome_aba = nome_aba.replace(ch, '-')
                 df.to_excel(writer, sheet_name=nome_aba, index=False)
                 formatar_aba(writer.sheets[nome_aba], todas_cols)
-
     output.seek(0)
-    return output, None
+    return output
 
-# ─── Interface Streamlit ───────────────────────────────────────────────────────
+# ─── Interface ─────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Cultura Inglesa — Mapa de Notas",
     page_icon="📊",
@@ -318,158 +402,159 @@ st.set_page_config(
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
-
-    html, body, [class*="css"] {
-        font-family: 'Barlow', sans-serif;
-        background-color: #f4f6fb;
-    }
+    html, body, [class*="css"] { font-family: 'Barlow', sans-serif; background-color: #f4f6fb; }
 
     .header {
-        background: linear-gradient(135deg, #1a2b6b 0%, #223080 100%);
-        padding: 1.8rem 2.5rem;
-        border-radius: 16px;
-        margin-bottom: 0.5rem;
+        background: white;
+        border-bottom: 3px solid #e32119;
+        padding: 1.2rem 2rem;
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
         display: flex;
         align-items: center;
         gap: 1.5rem;
-        box-shadow: 0 4px 24px rgba(26,43,107,0.18);
+        box-shadow: 0 2px 12px rgba(26,43,107,0.08);
     }
     .header-text h1 {
         font-family: 'Barlow Condensed', sans-serif;
-        font-size: 1.9rem;
+        font-size: 1.8rem;
         font-weight: 700;
         margin: 0;
-        color: white;
-        letter-spacing: 0.5px;
+        color: #1a2b6b;
+        letter-spacing: 0.3px;
     }
-    .header-text p {
-        margin: 0.2rem 0 0;
-        color: rgba(255,255,255,0.75);
-        font-size: 0.9rem;
-    }
-    .header img { height: 52px; }
+    .header-text p { margin: 0.1rem 0 0; color: #888; font-size: 0.85rem; }
+    .header img { height: 48px; }
 
     .unit-card {
         background: white;
         border: 2px solid #e8edf8;
         border-radius: 14px;
-        padding: 1.5rem 1rem;
+        padding: 1.5rem 1rem 1rem;
         text-align: center;
-        transition: all 0.2s;
         box-shadow: 0 2px 8px rgba(26,43,107,0.06);
     }
-    .unit-card:hover {
-        border-color: #1a2b6b;
-        box-shadow: 0 6px 24px rgba(26,43,107,0.14);
-        transform: translateY(-2px);
-    }
     .unit-name {
-        font-size: 1.15rem;
+        font-size: 1.2rem;
         font-weight: 700;
         color: #1a2b6b;
-        margin-bottom: 0.2rem;
         font-family: 'Barlow Condensed', sans-serif;
         letter-spacing: 0.3px;
+        margin-bottom: 0.15rem;
     }
-    .unit-sub {
-        font-size: 0.78rem;
-        color: #9aa3b8;
-        margin-bottom: 1rem;
-    }
-    .stButton > button {
+    .unit-sem { font-size: 0.75rem; color: #aaa; margin-bottom: 1rem; }
+
+    div[data-testid="stButton"] button {
         background: #1a2b6b !important;
         color: white !important;
         border: none !important;
         border-radius: 8px !important;
         font-weight: 600 !important;
-        font-family: 'Barlow', sans-serif !important;
         width: 100% !important;
-        transition: background 0.2s !important;
     }
-    .stButton > button:hover {
-        background: #e32119 !important;
-    }
-    .semestre-badge {
+    div[data-testid="stButton"] button:hover { background: #e32119 !important; }
+
+    .sem-badge {
         display: inline-block;
-        background: #e8edf8;
+        background: #f0f3ff;
         color: #1a2b6b;
-        padding: 0.25rem 1rem;
+        padding: 0.2rem 0.9rem;
         border-radius: 20px;
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         font-weight: 600;
-        margin-bottom: 1.8rem;
-        letter-spacing: 0.5px;
+        margin-bottom: 1.5rem;
     }
-    .divider {
-        border: none;
-        border-top: 2px solid #e8edf8;
-        margin: 1.5rem 0;
+    .section-title {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1a2b6b;
+        margin-bottom: 0.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Header com logo
-import base64
-from pathlib import Path
-
-def img_to_base64(path):
+# Header
+def img_to_b64(path):
     try:
         return base64.b64encode(Path(path).read_bytes()).decode()
     except:
         return None
 
-logo_b64 = img_to_base64("logo.png")
-logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else ""
+logo_b64  = img_to_b64("logo.png")
+logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else "🏫"
 
 st.markdown(f"""
 <div class="header">
     {logo_html}
     <div class="header-text">
-        <h1>Mapa de Notas</h1>
+        <h1>Cultura Inglesa — Mapa de Notas</h1>
         <p>Extração automática de notas via Sponte API</p>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown(f'<div class="semestre-badge">📅 Semestre {SEMESTRE}</div>', unsafe_allow_html=True)
-
 # Cards das unidades
 cols = st.columns(4)
 for idx, (nome, config) in enumerate(UNIDADES.items()):
     with cols[idx]:
-        nome_limpo = nome.replace("🏫 ", "")
         st.markdown(f"""
         <div class="unit-card">
-            <div class="unit-name">{nome_limpo}</div>
-            <div class="unit-sub">Cód. {config["codigo"]}</div>
+            <div class="unit-name">{nome}</div>
+            <div class="unit-sem">Semestre {config["semestre"]}</div>
         </div>
         """, unsafe_allow_html=True)
-
-        if st.button(f"Gerar Planilha", key=f"btn_{idx}"):
-            st.session_state[f"gerar_{idx}"] = True
+        if st.button("📥 Nova Planilha", key=f"novo_{idx}"):
+            st.session_state[f"acao_{idx}"] = "nova"
+        if st.button("🔄 Atualizar Existente", key=f"atualizar_{idx}"):
+            st.session_state[f"acao_{idx}"] = "atualizar"
 
 # Processamento
 for idx, (nome, config) in enumerate(UNIDADES.items()):
-    if st.session_state.get(f"gerar_{idx}"):
-        st.session_state[f"gerar_{idx}"] = False
-        nome_limpo = nome.replace("🏫 ", "")
+    acao = st.session_state.get(f"acao_{idx}")
+    if not acao:
+        continue
 
-        st.markdown("---")
-        st.markdown(f"### Gerando planilha — {nome_limpo}")
+    st.markdown("---")
+    st.markdown(f"### {'📥 Nova planilha' if acao == 'nova' else '🔄 Atualizar planilha'} — {nome}")
 
+    arquivo_existente = None
+    if acao == "atualizar":
+        uploaded = st.file_uploader(
+            "Faça upload da planilha anterior para preservar os comentários:",
+            type=["xlsx"],
+            key=f"upload_{idx}"
+        )
+        if not uploaded:
+            st.info("📎 Aguardando upload da planilha existente...")
+            continue
+        arquivo_existente = uploaded
+
+    if st.button("▶️ Iniciar geração", key=f"iniciar_{idx}"):
         progress_bar = st.progress(0)
         status_text  = st.empty()
 
-        arquivo, erro = gerar_planilha(nome_limpo, config["token"], progress_bar, status_text)
+        dados, erro = coletar_dados(config["token"], config["semestre"], progress_bar, status_text)
 
         if erro:
             st.error(f"❌ {erro}")
         else:
-            st.success(f"✅ Planilha de {nome_limpo} gerada com sucesso!")
+            if arquivo_existente:
+                status_text.text("🔄 Mesclando com planilha existente...")
+                dados = mesclar_com_existente(dados, arquivo_existente)
+
+            status_text.text("✅ Gerando arquivo Excel...")
+            arquivo_final = exportar_excel(dados)
+
+            sem_fmt    = config["semestre"].replace("/", ".")
+            nome_arq   = f"mapadenotas_{nome}_{sem_fmt}.xlsx"
+
+            st.success(f"✅ Planilha gerada com sucesso!")
             st.download_button(
-                label=f"⬇️ Baixar notas_{nome_limpo}_{SEMESTRE}.xlsx",
-                data=arquivo,
-                file_name=f"notas_{nome_limpo}_{SEMESTRE}.xlsx",
+                label=f"⬇️ Baixar {nome_arq}",
+                data=arquivo_final,
+                file_name=nome_arq,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"download_{idx}"
             )
+        st.session_state[f"acao_{idx}"] = None
