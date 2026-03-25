@@ -83,12 +83,12 @@ COLUNAS_A      = build_colunas_a()
 COLUNAS_B      = [f"{pre} - {comp}" for _, (pre, comp) in PROVAS_B_SIMPLES.items()] + ["Média Geral Av"]
 
 # Info columns — Action Plan e Comments logo após Média Geral
-COLUNAS_INFO_A = ["Turma", "Phase", "Professor", "student_id", "Nome Aluno", "Situação", "Média Geral", "Action Plan", "Coordinator's Comment", "⚠️ Alerta", "Status"]
-COLUNAS_INFO_B = ["Turma", "Phase", "Professor", "student_id", "Nome Aluno", "Situação", "Action Plan", "Coordinator's Comment", "⚠️ Alerta", "Status"]
-TODAS_COLS_A   = COLUNAS_INFO_A + COLUNAS_A
-TODAS_COLS_B   = COLUNAS_INFO_B + COLUNAS_B
+COLUNAS_INFO_A = ["Turma", "Phase", "Professor", "student_id", "Nome Aluno", "Situação", "Média Geral", "Action Plan", "Coordinator's Comment", "⚠️ Alerta"]
+COLUNAS_INFO_B = ["Turma", "Phase", "Professor", "student_id", "Nome Aluno", "Situação", "Action Plan", "Coordinator's Comment", "⚠️ Alerta"]
+TODAS_COLS_A   = COLUNAS_INFO_A + COLUNAS_A + ["Status"]
+TODAS_COLS_B   = COLUNAS_INFO_B + COLUNAS_B + ["Status"]
 
-COLUNAS_OCULTAS = {"Phase", "student_id", "Professor", "Situação", "⚠️ Alerta"}
+COLUNAS_OCULTAS = {"Phase", "student_id", "Professor", "Situação"}
 
 # Colunas de nota por prova (para calcular alerta)
 COLS_PC    = ["PC - Speaking/Oral", "PC - Gramática & Vocab", "PC - Homework"]
