@@ -807,6 +807,9 @@ for idx, (nome, config) in enumerate(UNIDADES.items()):
                 type=["xlsx"], key=f"upload_{idx}"
             )
             if not uploaded:
+                # Limpa download anterior ao aguardar novo upload
+                st.session_state.pop(f"arquivo_{idx}", None)
+                st.session_state.pop(f"nome_arq_{idx}", None)
                 st.info("📎 Aguardando upload...")
                 continue
             arquivo_existente = uploaded
