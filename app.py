@@ -601,10 +601,19 @@ st.markdown("""
         transition: all 0.15s !important;
         letter-spacing: 0.2px !important;
     }
+    div[data-testid="stButton"] button p,
+    div[data-testid="stButton"] button span {
+        color: white !important;
+    }
     div[data-testid="stButton"] button:hover {
         background: #e32119 !important;
         transform: translateY(-1px) !important;
         box-shadow: 0 4px 12px rgba(227,33,25,0.3) !important;
+        color: white !important;
+    }
+    div[data-testid="stButton"] button:hover p,
+    div[data-testid="stButton"] button:hover span {
+        color: white !important;
     }
 
     /* ── ZIP button ── */
