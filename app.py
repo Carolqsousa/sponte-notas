@@ -610,10 +610,20 @@ st.markdown("""
     div[data-testid="stRadio"] label {
         font-size: 0.85rem !important;
         font-weight: 600 !important;
-        color: #374151 !important;
+        color: #1a2b6b !important;
+        background: #e8edf8 !important;
+        padding: 0.3rem 0.9rem !important;
+        border-radius: 8px !important;
+        border: 1px solid #d0d8ee !important;
+    }
+    div[data-testid="stRadio"] label:has(input:checked) {
+        background: #1a2b6b !important;
+        color: white !important;
+        border-color: #1a2b6b !important;
     }
     div[data-testid="stRadio"] > div {
         gap: 0.5rem !important;
+        flex-direction: row !important;
     }
 
     /* ── Upload ── */
@@ -646,8 +656,10 @@ def img_to_b64(path):
     except:
         return None
 
-logo_b64  = img_to_b64("logo.png")
-logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else ""
+logo_b64 = (img_to_b64("logo.png") or
+            img_to_b64("/mount/src/sponte-notas/logo.png") or
+            img_to_b64("./logo.png"))
+logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else "🏫"
 
 # ── Header ──
 st.markdown(f"""
@@ -659,7 +671,7 @@ st.markdown(f"""
             <div class="ci-subtitle">Extração automática via Sponte API</div>
         </div>
     </div>
-    <div class="ci-badge">2026</div>
+    <div class="ci-badge">📅 Semestre 2026.1</div>
 </div>
 """, unsafe_allow_html=True)
 
