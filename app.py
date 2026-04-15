@@ -490,7 +490,7 @@ st.markdown("""
         box-shadow: 0 4px 20px rgba(26,43,107,0.2);
     }
     .ci-header-left { display: flex; align-items: center; gap: 1rem; }
-    .ci-header img { height: 40px; filter: brightness(0) invert(1); }
+    .ci-header img { height: 44px; }
     .ci-title { color: white; font-size: 1.3rem; font-weight: 800; margin: 0; letter-spacing: -0.3px; }
     .ci-subtitle { color: rgba(255,255,255,0.55); font-size: 0.75rem; margin: 0; }
     .ci-badge {
@@ -607,23 +607,34 @@ st.markdown("""
     }
 
     /* ── Radio style ── */
+    div[data-testid="stRadio"] > div {
+        gap: 0.5rem !important;
+        flex-direction: row !important;
+    }
     div[data-testid="stRadio"] label {
         font-size: 0.85rem !important;
         font-weight: 600 !important;
         color: #1a2b6b !important;
         background: #e8edf8 !important;
-        padding: 0.3rem 0.9rem !important;
+        padding: 0.35rem 1rem !important;
         border-radius: 8px !important;
-        border: 1px solid #d0d8ee !important;
+        border: 1px solid #c8d2e8 !important;
+        cursor: pointer !important;
+    }
+    div[data-testid="stRadio"] label p {
+        color: #1a2b6b !important;
     }
     div[data-testid="stRadio"] label:has(input:checked) {
         background: #1a2b6b !important;
-        color: white !important;
         border-color: #1a2b6b !important;
     }
-    div[data-testid="stRadio"] > div {
-        gap: 0.5rem !important;
-        flex-direction: row !important;
+    div[data-testid="stRadio"] label:has(input:checked) p {
+        color: white !important;
+    }
+    div[data-testid="stRadio"] span[data-testid="stWidgetLabel"] {
+        font-weight: 700 !important;
+        color: #1a2b6b !important;
+        font-size: 0.85rem !important;
     }
 
     /* ── Upload ── */
