@@ -216,12 +216,11 @@ def extrair_notas_b(notas_data):
     return resultado
 
 def calcular_alerta(linha, prova_lancada, formato_b):
-    """Retorna ⚠️ se alguma nota esperada estiver vazia ou < 7."""
+    """Formato B: sem alerta, mostra todos os alunos sempre.
+    Formato A: alerta em notas vazias ou < 7 nas provas lançadas."""
     if formato_b:
-        cols_verificar = COLS_AV
-    else:
-        cols_verificar = PROVA_COLS_MAP.get(prova_lancada, COLS_PC)
-
+        return ""  # Formato B sempre visível
+    cols_verificar = PROVA_COLS_MAP.get(prova_lancada, COLS_PC)
     for col in cols_verificar:
         val = linha.get(col, "")
         if val == "" or val is None:
@@ -335,15 +334,13 @@ def formatar_aba(ws, colunas, prova_lancada, formato_b):
     # Aplica filtro na coluna Alerta — mostra só ⚠️
     # Oculta linhas onde Alerta está vazio (alunos sem problema)
     alerta_idx = next((i for i, c in enumerate(colunas) if c == "⚠️ Alerta"), None)
-    if alerta_idx is not None:
+    if alerta_idx is not None and not formato_b:
+        # Formato B: sem filtro, todos os alunos visíveis
         from openpyxl.worksheet.filters import FilterColumn, Filters
         fc = FilterColumn(colId=alerta_idx)
         fc.filters = Filters()
         fc.filters.filter.append("⚠️")
         ws.auto_filter.filterColumn.append(fc)
-
-        # Oculta manualmente as linhas sem alerta
-        # (garante que o Excel mostre o filtro aplicado ao abrir)
         for row in ws.iter_rows(min_row=2):
             alerta_cell = row[alerta_idx]
             if alerta_cell.value != "⚠️":
@@ -753,9 +750,17 @@ for idx, (nome, config) in enumerate(UNIDADES.items()):
         c1, c2 = st.columns(2)
         with c1:
             if st.button("📥 Nova", key=f"novo_{idx}", use_container_width=True):
+                for other in range(len(UNIDADES)):
+                    if other != idx:
+                        st.session_state[f"acao_{other}"] = None
+                        st.session_state.pop(f"arquivo_{other}", None)
                 st.session_state[f"acao_{idx}"] = "nova"
         with c2:
             if st.button("🔄 Atualizar", key=f"atualizar_{idx}", use_container_width=True):
+                for other in range(len(UNIDADES)):
+                    if other != idx:
+                        st.session_state[f"acao_{other}"] = None
+                        st.session_state.pop(f"arquivo_{other}", None)
                 st.session_state[f"acao_{idx}"] = "atualizar"
 
 # ── Baixar todas ──
