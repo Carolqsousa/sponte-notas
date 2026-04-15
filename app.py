@@ -476,7 +476,23 @@ st.markdown("""
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
     }
-    .stApp { background: #f0f2f8; }
+    .stApp { background: #f0f2f8 !important; }
+    /* Force light theme on all text elements */
+    .stMarkdown p, label, div[data-testid="stFileUploader"] label,
+    div[data-testid="stFileUploader"] p, div[data-testid="stFileUploader"] span,
+    div[data-testid="stFileUploadDropzone"] span,
+    section[data-testid="stFileUploadDropzone"] span,
+    div[data-testid="stInfo"] p { color: #1a2b6b !important; }
+    div[data-testid="stFileUploadDropzone"] {
+        background: #f8faff !important;
+        border: 2px dashed #c8d2e8 !important;
+        border-radius: 10px !important;
+    }
+    div[data-testid="stFileUploadDropzone"] button {
+        background: #1a2b6b !important;
+        color: white !important;
+        border-radius: 8px !important;
+    }
 
     /* ── Header ── */
     .ci-header {
@@ -788,13 +804,23 @@ for idx, (nome, config) in enumerate(UNIDADES.items()):
                 sem_fmt       = config["semestre"].replace("/", ".")
                 nome_arq      = f"mapadenotas_{nome}_{sem_fmt}.xlsx"
 
-                st.success(f"✅ Pronto! {nome_arq}")
-                st.download_button(
-                    label=f"⬇️ Baixar {nome_arq}",
-                    data=arquivo_final,
-                    file_name=nome_arq,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key=f"download_{idx}",
-                    use_container_width=True
-                )
+                # Salva no session_state para não sumir após rerenderização
+                st.session_state[f"arquivo_{idx}"] = arquivo_final.getvalue()
+                st.session_state[f"nome_arq_{idx}"] = nome_arq
             st.session_state[f"acao_{idx}"] = None
+
+        # Botão de download persiste enquanto arquivo estiver no session_state
+        if st.session_state.get(f"arquivo_{idx}"):
+            nome_arq = st.session_state[f"nome_arq_{idx}"]
+            st.success(f"✅ Pronto! Clique para baixar.")
+            if st.download_button(
+                label=f"⬇️ Baixar {nome_arq}",
+                data=st.session_state[f"arquivo_{idx}"],
+                file_name=nome_arq,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"download_{idx}",
+                use_container_width=True
+            ):
+                # Limpa após download
+                del st.session_state[f"arquivo_{idx}"]
+                del st.session_state[f"nome_arq_{idx}"]
