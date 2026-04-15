@@ -493,6 +493,17 @@ st.markdown("""
         color: white !important;
         border-radius: 8px !important;
     }
+    /* Status text during loading */
+    div[data-testid="stText"] p,
+    div[data-testid="stText"],
+    .stText, .stText p,
+    div[data-testid="stEmpty"] p,
+    div[data-testid="stEmpty"],
+    p { color: #1a2b6b !important; }
+    /* Progress bar track */
+    div[data-testid="stProgressBar"] > div {
+        background: #e8edf8 !important;
+    }
 
     /* ── Header ── */
     .ci-header {
