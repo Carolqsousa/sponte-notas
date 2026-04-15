@@ -471,50 +471,175 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Barlow', sans-serif; background-color: #f4f6fb; }
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-    .header {
-        background: white;
-        border-bottom: 3px solid #e32119;
-        padding: 1.2rem 2rem;
-        border-radius: 12px;
-        margin-bottom: 1.5rem;
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .stApp { background: #f0f2f8; }
+
+    /* ── Header ── */
+    .ci-header {
+        background: #1a2b6b;
+        border-radius: 16px;
+        padding: 1.1rem 2rem;
         display: flex;
         align-items: center;
-        gap: 1.5rem;
-        box-shadow: 0 2px 12px rgba(26,43,107,0.08);
+        justify-content: space-between;
+        margin-bottom: 1.2rem;
+        box-shadow: 0 4px 20px rgba(26,43,107,0.2);
     }
-    .header-text h1 {
-        font-family: 'Barlow Condensed', sans-serif;
-        font-size: 1.8rem; font-weight: 700;
-        margin: 0; color: #1a2b6b; letter-spacing: 0.3px;
+    .ci-header-left { display: flex; align-items: center; gap: 1rem; }
+    .ci-header img { height: 40px; filter: brightness(0) invert(1); }
+    .ci-title { color: white; font-size: 1.3rem; font-weight: 800; margin: 0; letter-spacing: -0.3px; }
+    .ci-subtitle { color: rgba(255,255,255,0.55); font-size: 0.75rem; margin: 0; }
+    .ci-badge {
+        background: rgba(255,255,255,0.12);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: white;
+        padding: 0.3rem 0.9rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
     }
-    .header-text p { margin: 0.1rem 0 0; color: #888; font-size: 0.85rem; }
-    .header img { height: 48px; }
 
+    /* ── Prova selector ── */
+    .prova-bar {
+        background: white;
+        border-radius: 12px;
+        padding: 0.9rem 1.5rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: 0 1px 6px rgba(26,43,107,0.07);
+    }
+    .prova-label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        white-space: nowrap;
+    }
+
+    /* ── Unit cards ── */
+    .unit-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.8rem;
+        margin-bottom: 0.8rem;
+    }
     .unit-card {
-        background: white; border: 2px solid #e8edf8;
-        border-radius: 14px; padding: 1.2rem 1rem 0.8rem;
-        text-align: center; box-shadow: 0 2px 8px rgba(26,43,107,0.06);
-        margin-bottom: 0.5rem;
+        background: white;
+        border-radius: 14px;
+        padding: 1.1rem 1rem 0.9rem;
+        box-shadow: 0 1px 6px rgba(26,43,107,0.07);
+        border: 1.5px solid #e8edf5;
+        position: relative;
+        overflow: hidden;
+    }
+    .unit-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #1a2b6b, #e32119);
     }
     .unit-name {
-        font-size: 1.2rem; font-weight: 700; color: #1a2b6b;
-        font-family: 'Barlow Condensed', sans-serif; margin-bottom: 0.1rem;
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #1a2b6b;
+        margin-bottom: 0.1rem;
     }
-    .unit-sem { font-size: 0.75rem; color: #aaa; margin-bottom: 0.8rem; }
+    .unit-sem {
+        font-size: 0.7rem;
+        color: #9ca3af;
+        margin-bottom: 0.7rem;
+        font-weight: 500;
+    }
+    .unit-actions { display: flex; gap: 0.4rem; }
 
+    /* ── Buttons ── */
     div[data-testid="stButton"] button {
-        background: #1a2b6b !important; color: white !important;
-        border: none !important; border-radius: 8px !important;
-        font-weight: 600 !important; width: 100% !important;
-        margin-bottom: 4px !important;
+        background: #1a2b6b !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        font-size: 0.78rem !important;
+        padding: 0.35rem 0.6rem !important;
+        width: 100% !important;
+        transition: all 0.15s !important;
+        letter-spacing: 0.2px !important;
     }
-    div[data-testid="stButton"] button:hover { background: #e32119 !important; }
+    div[data-testid="stButton"] button:hover {
+        background: #e32119 !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 12px rgba(227,33,25,0.3) !important;
+    }
+
+    /* ── ZIP button ── */
+    .zip-btn div[data-testid="stButton"] button {
+        background: #111827 !important;
+        font-size: 0.85rem !important;
+        padding: 0.5rem 1rem !important;
+    }
+    .zip-btn div[data-testid="stButton"] button:hover {
+        background: #374151 !important;
+    }
+
+    /* ── Progress section ── */
+    .processing-card {
+        background: white;
+        border-radius: 14px;
+        padding: 1.5rem;
+        margin-top: 0.8rem;
+        border: 1.5px solid #e8edf5;
+        box-shadow: 0 1px 6px rgba(26,43,107,0.07);
+    }
+    .processing-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #1a2b6b;
+        margin-bottom: 1rem;
+    }
+
+    /* ── Radio style ── */
+    div[data-testid="stRadio"] label {
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+        color: #374151 !important;
+    }
+    div[data-testid="stRadio"] > div {
+        gap: 0.5rem !important;
+    }
+
+    /* ── Upload ── */
+    div[data-testid="stFileUploader"] {
+        border-radius: 10px !important;
+    }
+
+    /* ── Download button ── */
+    div[data-testid="stDownloadButton"] button {
+        background: #059669 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        width: 100% !important;
+    }
+    div[data-testid="stDownloadButton"] button:hover {
+        background: #047857 !important;
+    }
+
+    /* ── Divider ── */
+    hr { border-color: #e5e7eb !important; margin: 0.8rem 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
+# ── Helpers ──
 def img_to_b64(path):
     try:
         return base64.b64encode(Path(path).read_bytes()).decode()
@@ -522,28 +647,41 @@ def img_to_b64(path):
         return None
 
 logo_b64  = img_to_b64("logo.png")
-logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else "🏫"
+logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else ""
 
+# ── Header ──
 st.markdown(f"""
-<div class="header">
-    {logo_html}
-    <div class="header-text">
-        <h1>Cultura Inglesa — Mapa de Notas</h1>
-        <p>Extração automática de notas via Sponte API</p>
+<div class="ci-header">
+    <div class="ci-header-left">
+        {logo_html}
+        <div>
+            <div class="ci-title">Cultura Inglesa — Mapa de Notas</div>
+            <div class="ci-subtitle">Extração automática via Sponte API</div>
+        </div>
     </div>
+    <div class="ci-badge">2026</div>
 </div>
 """, unsafe_allow_html=True)
 
-# ─── Seletor de prova lançada ──────────────────────────────────────────────────
-prova_lancada = st.radio(
-    "📝 Qual é a última prova lançada?",
-    ["Progress Check", "Mid-term", "Final"],
-    horizontal=True
-)
+# ── Seletor de prova + cards numa linha ──
+col_prova, col_zip = st.columns([3, 1])
 
-st.markdown("---")
+with col_prova:
+    prova_lancada = st.radio(
+        "**Última prova lançada:**",
+        ["Progress Check", "Mid-term", "Final"],
+        horizontal=True,
+        key="prova_radio"
+    )
 
-# ─── Cards das unidades ────────────────────────────────────────────────────────
+with col_zip:
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    if st.button("📦 Baixar Todas (ZIP)", use_container_width=True, key="btn_zip"):
+        st.session_state["baixar_todas"] = True
+
+st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+
+# ── Cards das unidades ──
 cols = st.columns(4)
 for idx, (nome, config) in enumerate(UNIDADES.items()):
     with cols[idx]:
@@ -553,82 +691,87 @@ for idx, (nome, config) in enumerate(UNIDADES.items()):
             <div class="unit-sem">Semestre {config["semestre"]}</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("📥 Nova Planilha", key=f"novo_{idx}"):
-            st.session_state[f"acao_{idx}"] = "nova"
-        if st.button("🔄 Atualizar Existente", key=f"atualizar_{idx}"):
-            st.session_state[f"acao_{idx}"] = "atualizar"
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("📥 Nova", key=f"novo_{idx}", use_container_width=True):
+                st.session_state[f"acao_{idx}"] = "nova"
+        with c2:
+            if st.button("🔄 Atualizar", key=f"atualizar_{idx}", use_container_width=True):
+                st.session_state[f"acao_{idx}"] = "atualizar"
 
-# ─── Botão baixar todas ────────────────────────────────────────────────────────
-st.markdown("---")
-if st.button("📦 Baixar Todas as Unidades (ZIP)", use_container_width=True):
-    st.session_state["baixar_todas"] = True
-
+# ── Baixar todas ──
 if st.session_state.get("baixar_todas"):
     st.session_state["baixar_todas"] = False
-    st.markdown("### 📦 Gerando planilhas de todas as unidades...")
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for nome_u, config_u in UNIDADES.items():
-            pb_u      = st.progress(0)
-            status_u  = st.empty()
-            dados_u, erro_u = coletar_dados(config_u["token"], config_u["semestre"], prova_lancada, pb_u, status_u)
-            if not erro_u:
-                arq_u   = exportar_excel(dados_u, prova_lancada)
-                sem_fmt = config_u["semestre"].replace("/", ".")
-                zf.writestr(f"mapadenotas_{nome_u}_{sem_fmt}.xlsx", arq_u.read())
-    zip_buffer.seek(0)
-    st.download_button(
-        "⬇️ Baixar ZIP com todas as unidades",
-        data=zip_buffer,
-        file_name="mapadenotas_todas_unidades.zip",
-        mime="application/zip",
-        key="download_todas"
-    )
+    with st.container():
+        st.markdown("---")
+        st.markdown("**📦 Gerando todas as unidades...**")
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for nome_u, config_u in UNIDADES.items():
+                pb_u     = st.progress(0, text=f"⏳ {nome_u}...")
+                status_u = st.empty()
+                dados_u, erro_u = coletar_dados(config_u["token"], config_u["semestre"], prova_lancada, pb_u, status_u)
+                if not erro_u:
+                    arq_u   = exportar_excel(dados_u, prova_lancada)
+                    sem_fmt = config_u["semestre"].replace("/", ".")
+                    zf.writestr(f"mapadenotas_{nome_u}_{sem_fmt}.xlsx", arq_u.read())
+        zip_buffer.seek(0)
+        st.download_button(
+            "⬇️ Baixar ZIP com todas as unidades",
+            data=zip_buffer,
+            file_name="mapadenotas_todas_unidades.zip",
+            mime="application/zip",
+            key="download_todas",
+            use_container_width=True
+        )
 
-# ─── Processamento por unidade ─────────────────────────────────────────────────
+# ── Processamento por unidade ──
 for idx, (nome, config) in enumerate(UNIDADES.items()):
     acao = st.session_state.get(f"acao_{idx}")
     if not acao:
         continue
 
     st.markdown("---")
-    st.markdown(f"### {'📥 Nova planilha' if acao == 'nova' else '🔄 Atualizar planilha'} — {nome}")
+    with st.container():
+        icon = "📥" if acao == "nova" else "🔄"
+        st.markdown(f"**{icon} {'Nova planilha' if acao == 'nova' else 'Atualizar planilha'} — {nome}**")
 
-    arquivo_existente = None
-    if acao == "atualizar":
-        uploaded = st.file_uploader(
-            "Faça upload da planilha anterior:",
-            type=["xlsx"], key=f"upload_{idx}"
-        )
-        if not uploaded:
-            st.info("📎 Aguardando upload da planilha existente...")
-            continue
-        arquivo_existente = uploaded
-
-    if st.button("▶️ Iniciar geração", key=f"iniciar_{idx}"):
-        progress_bar = st.progress(0)
-        status_text  = st.empty()
-
-        dados, erro = coletar_dados(config["token"], config["semestre"], prova_lancada, progress_bar, status_text)
-
-        if erro:
-            st.error(f"❌ {erro}")
-        else:
-            if arquivo_existente:
-                status_text.text("🔄 Mesclando comentários...")
-                dados = mesclar_com_existente(dados, arquivo_existente)
-
-            status_text.text("✅ Gerando arquivo...")
-            arquivo_final = exportar_excel(dados, prova_lancada)
-            sem_fmt       = config["semestre"].replace("/", ".")
-            nome_arq      = f"mapadenotas_{nome}_{sem_fmt}.xlsx"
-
-            st.success("✅ Planilha gerada com sucesso!")
-            st.download_button(
-                label=f"⬇️ Baixar {nome_arq}",
-                data=arquivo_final,
-                file_name=nome_arq,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"download_{idx}"
+        arquivo_existente = None
+        if acao == "atualizar":
+            uploaded = st.file_uploader(
+                "Upload da planilha anterior:",
+                type=["xlsx"], key=f"upload_{idx}"
             )
-        st.session_state[f"acao_{idx}"] = None
+            if not uploaded:
+                st.info("📎 Aguardando upload...")
+                continue
+            arquivo_existente = uploaded
+
+        if st.button("▶️ Gerar agora", key=f"iniciar_{idx}", use_container_width=True):
+            progress_bar = st.progress(0)
+            status_text  = st.empty()
+
+            dados, erro = coletar_dados(config["token"], config["semestre"], prova_lancada, progress_bar, status_text)
+
+            if erro:
+                st.error(f"❌ {erro}")
+            else:
+                if arquivo_existente:
+                    status_text.text("🔄 Mesclando comentários...")
+                    dados = mesclar_com_existente(dados, arquivo_existente)
+
+                status_text.text("✅ Gerando arquivo...")
+                arquivo_final = exportar_excel(dados, prova_lancada)
+                sem_fmt       = config["semestre"].replace("/", ".")
+                nome_arq      = f"mapadenotas_{nome}_{sem_fmt}.xlsx"
+
+                st.success(f"✅ Pronto! {nome_arq}")
+                st.download_button(
+                    label=f"⬇️ Baixar {nome_arq}",
+                    data=arquivo_final,
+                    file_name=nome_arq,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"download_{idx}",
+                    use_container_width=True
+                )
+            st.session_state[f"acao_{idx}"] = None
